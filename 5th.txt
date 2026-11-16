@@ -1,0 +1,180 @@
+"""
+Continuous Bag of Words (CBOW) model from scratch with NumPy.
+
+Stages:
+  a. Data preparation
+  b. Generate training data
+  c. Train model
+  d. Output
+"""
+import re
+import numpy as np
+
+np.random.seed(42)
+
+
+
+
+
+# ---------------------------------------------------------------
+# a. DATA PREPARATION
+# ---------------------------------------------------------------
+corpus = """
+The quick brown fox jumps over the lazy dog.
+The dog barks at the fox and the fox runs away.
+A quick brown dog jumps over the lazy fox.
+Natural language processing helps computers understand human language.
+Word embeddings capture the meaning of words in vectors.
+The model learns word vectors by predicting a word from its context.
+Computers learn language from large amounts of text.
+The cat and the dog are friends and the cat likes the dog.
+"""
+
+
+def preprocess(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z\s]", " ", text)      # drop punctuation
+    return text.split()                         # tokenise
+
+
+tokens = preprocess(corpus)
+vocab = sorted(set(tokens))
+V = len(vocab)
+word2idx = {w: i for i, w in enumerate(vocab)}
+idx2word = {i: w for w, i in word2idx.items()}
+
+print("=== a. Data preparation ===")
+print(f"Total tokens : {len(tokens)}")
+print(f"Vocab size   : {V}")
+print(f"Vocabulary   : {vocab}\n")
+
+
+
+
+# ---------------------------------------------------------------
+# b. GENERATE TRAINING DATA  (context words -> target word)
+# ---------------------------------------------------------------
+WINDOW = 2   # words on each side of the target
+
+
+def generate_training_data(tokens, window):
+    data = []
+    for i, target in enumerate(tokens):
+        context = [tokens[j]
+                   for j in range(max(0, i - window), min(len(tokens), i + window + 1))
+                   if j != i]
+        data.append((context, target))
+    return data
+
+
+def one_hot(idx, size):
+    v = np.zeros(size)
+    v[idx] = 1
+    return v
+
+
+pairs = generate_training_data(tokens, WINDOW)
+# X: (context indices list), y: target index
+X = [[word2idx[w] for w in ctx] for ctx, _ in pairs]
+y = [word2idx[t] for _, t in pairs]
+
+print("=== b. Training data (first 5 samples) ===")
+for ctx, tgt in pairs[:5]:
+    print(f"  context={ctx}  ->  target='{tgt}'")
+print(f"Total training samples: {len(pairs)}\n")
+
+
+
+
+# ---------------------------------------------------------------
+# c. TRAIN MODEL
+# ---------------------------------------------------------------
+N = 10            # embedding dimension
+EPOCHS = 500
+LR = 0.05
+
+W1 = np.random.randn(V, N) * 0.1    # input  -> hidden (word embeddings)
+W2 = np.random.randn(N, V) * 0.1    # hidden -> output
+
+
+def softmax(u):
+    e = np.exp(u - np.max(u))
+    return e / e.sum()
+
+
+def forward(context_idx):
+    # average the one-hot context vectors == average the rows of W1
+    x_avg = np.mean([one_hot(i, V) for i in context_idx], axis=0)
+    h = x_avg @ W1                  # hidden layer (N,)
+    u = h @ W2                      # scores (V,)
+    y_hat = softmax(u)              # probabilities (V,)
+    return x_avg, h, y_hat
+
+
+print("=== c. Training ===")
+loss_history = []
+for epoch in range(1, EPOCHS + 1):
+    total_loss = 0.0
+    for ctx_idx, tgt_idx in zip(X, y):
+        x_avg, h, y_hat = forward(ctx_idx)
+
+        # cross-entropy loss
+        total_loss += -np.log(y_hat[tgt_idx] + 1e-9)
+
+        # backprop
+        e = y_hat.copy()
+        e[tgt_idx] -= 1                       # dL/du
+        dW2 = np.outer(h, e)                  # (N, V)
+        dh = W2 @ e                           # (N,)
+        dW1 = np.outer(x_avg, dh)             # (V, N)
+
+        W2 -= LR * dW2
+        W1 -= LR * dW1
+
+    loss_history.append(total_loss / len(X))
+    if epoch % 50 == 0 or epoch == 1:
+        print(f"  Epoch {epoch:4d}/{EPOCHS}  loss = {loss_history[-1]:.4f}")
+
+
+
+
+
+# ---------------------------------------------------------------
+# d. OUTPUT
+# ---------------------------------------------------------------
+print("\n=== d. Output ===")
+
+
+def predict(context_words, top_k=3):
+    idxs = [word2idx[w] for w in context_words]
+    _, _, y_hat = forward(idxs)
+    top = np.argsort(y_hat)[::-1][:top_k]
+    return [(idx2word[i], float(y_hat[i])) for i in top]
+
+
+def most_similar(word, top_k=3):
+    emb = W1 / (np.linalg.norm(W1, axis=1, keepdims=True) + 1e-9)
+    sims = emb @ emb[word2idx[word]]
+    best = np.argsort(sims)[::-1][1:top_k + 1]
+    return [(idx2word[i], float(sims[i])) for i in best]
+
+
+tests = [["the", "quick", "fox", "jumps"],
+         ["the", "lazy", "the", "barks"],
+         ["word", "capture", "meaning", "of"]]
+for ctx in tests:
+    print(f"Context {ctx} -> predicted: {predict(ctx)}")
+
+print("\nEmbedding of 'fox':")
+print(np.round(W1[word2idx['fox']], 3))
+
+print("\nMost similar words:")
+for w in ["fox", "language", "dog"]:
+    print(f"  {w}: {[(a, round(b, 3)) for a, b in most_similar(w)]}")
+
+print(f"\nFinal loss: {loss_history[-1]:.4f} (started at {loss_history[0]:.4f})")
+
+
+
+
+
