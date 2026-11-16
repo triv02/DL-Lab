@@ -1,0 +1,76 @@
+import keras
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D,Dense, Flatten
+from keras.utils import to_categorical
+from keras.datasets import mnist
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+     
+
+(xtrain,ytrain),(xtest,ytest)=mnist.load_data()
+
+xtrain=xtrain.reshape((xtrain.shape[0],28,28,1))
+xtest=xtest.reshape((xtest.shape[0],28,28,1))
+     
+
+train_norm = xtrain.astype('float32')
+test_norm = xtest.astype('float32')
+xtrain = train_norm/255.0
+xtest = test_norm/255.0
+     
+
+for i in range(9):
+  plt.subplot(330+1+i)
+  plt.imshow(xtrain[i])
+
+
+model = Sequential()
+model.add(Conv2D(32,(3,3),activation='relu',input_shape=(28,28,1)))
+model.add(MaxPooling2D(2,2))
+model.add(Flatten())
+model.add(Dense(100,activation='relu'))
+model.add(Dense(10,activation='softmax'))
+
+
+model.compile(optimizer='sgd',loss='sparse_categorical_crossentropy',metrics=['accuracy'])
+
+history=model.fit(xtrain,ytrain,epochs=5,validation_data=(xtest,ytest))
+
+
+predictions =model.predict(xtest)
+
+import random
+index = random.randint(1,10000)
+plt.imshow(xtest[index])
+
+
+pred_num = max(predictions[index])
+for i in range(len(predictions[index])):
+    if(predictions[index][i] == pred_num):
+        print("Predicted number is: ",i)
+        break
+     
+
+print(model.evaluate(xtest,ytest))
+     
+
+import pandas as pd
+pd.DataFrame(history.history).plot(figsize=(9,5))
+plt.show()
+
+
+plt.figure(figsize=(13,4))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'],label='Training loss')
+plt.plot(history.history['val_loss'],label='Vaidation loss')
+plt.xlabel('Epochs')
+plt.ylabel('loss')
+plt.legend()
+plt.subplot(1,2,2)
+plt.plot(history.history['accuracy'],label='Training accuracy')
+plt.plot(history.history['val_accuracy'],label='Testing accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('accuracy')
+plt.legend()
