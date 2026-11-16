@@ -1,0 +1,56 @@
+# -------------------------------
+# Object Detection using Transfer Learning (VGG16 + CIFAR-10)
+# -------------------------------
+
+import tensorflow as tf
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Flatten, Dense
+from tensorflow.keras.utils import to_categorical
+
+
+# Normalize images (0-255 → 0-1)
+itrain = itrain / 255.0
+itest = itest / 255.0
+
+# One-hot encode labels
+ltrain = to_categorical(ltrain)
+ltest = to_categorical(ltest)
+
+
+# Step 2: Load pre-trained VGG16 model (without top layers)
+basem = VGG16(weights='imagenet', include_top=False, input_shape=(32, 32, 3))
+
+
+
+# Step 3: Freeze pre-trained layers
+for layer in basem.layers:
+    layer.trainable = False
+
+
+# Step 4: Create new model on top of VGG16
+semodel = Sequential()
+semodel.add(basem)
+semodel.add(Flatten())
+semodel.add(Dense(256, activation='relu'))
+semodel.add(Dense(10, activation='softmax'))  # CIFAR-10 → 10 classes
+
+
+# Step 5: Compile the model
+semodel.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+
+# Step 6: Train the model
+history = semodel.fit(
+    itrain, ltrain,
+    epochs=10,
+    batch_size=32,
+    validation_data=(itest, ltest)
+)
+
+
+# Step 7: Evaluate model
+loss, acc = semodel.evaluate(itest, ltest)
+print("\nTest accuracy:", acc)
+
